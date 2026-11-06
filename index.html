@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BookLine — AI Voice Front Desk (Demo)</title>
+<style>
+  :root { --ink:#17202a; --brand:#0f6f5c; --brand2:#0b4f42; --bg:#f4f6f5; --card:#fff; --mut:#5d6d66; --line:#dde5e1; --bad:#b3261e; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--brand2); color:#fff; padding:18px 22px; }
+  header h1 { margin:0; font-size:22px; letter-spacing:.2px; }
+  header p { margin:4px 0 0; opacity:.85; font-size:13.5px; }
+  .wrap { max-width:1060px; margin:0 auto; padding:18px; }
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tabs button { border:1px solid var(--line); background:#fff; padding:9px 16px; border-radius:999px; cursor:pointer; font-size:14px; }
+  .tabs button.on { background:var(--brand); color:#fff; border-color:var(--brand); }
+  .grid { display:grid; grid-template-columns:1.15fr .85fr; gap:16px; }
+  @media (max-width:860px){ .grid{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card h2 { margin:0 0 6px; font-size:16px; }
+  .card .sub { color:var(--mut); font-size:13px; margin:0 0 12px; }
+  #chat { height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; padding:12px; background:#fbfcfb; }
+  .msg { max-width:82%; padding:9px 12px; border-radius:12px; margin:0 0 9px; font-size:14px; line-height:1.45; white-space:pre-wrap; }
+  .msg.bot { background:#e7f2ee; border-bottom-left-radius:3px; }
+  .msg.user { background:#dcebf7; margin-left:auto; border-bottom-right-radius:3px; }
+  .msg.sys { background:#fdf3d8; margin-left:auto; margin-right:auto; text-align:center; font-size:13px; }
+  .row { display:flex; gap:8px; margin-top:10px; }
+  .row input[type=text] { flex:1; padding:10px; border:1px solid var(--line); border-radius:9px; font-size:14px; }
+  button.act { background:var(--brand); color:#fff; border:none; padding:10px 15px; border-radius:9px; cursor:pointer; font-size:14px; }
+  button.ghost { background:#fff; border:1px solid var(--line); padding:10px 12px; border-radius:9px; cursor:pointer; font-size:13.5px; }
+  button:disabled { opacity:.45; cursor:default; }
+  .chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .chips button { border:1px solid var(--brand); color:var(--brand2); background:#fff; border-radius:999px; padding:6px 12px; cursor:pointer; font-size:13px; }
+  .chips button:hover { background:var(--brand); color:#fff; }
+  label { display:block; font-size:13px; color:var(--mut); margin:11px 0 4px; }
+  select, input[type=date], input[type=text].full { width:100%; padding:9px; border:1px solid var(--line); border-radius:9px; font-size:14px; }
+  .confirm { border:1px solid var(--brand); background:#eefaf5; border-radius:10px; padding:12px; margin-top:12px; font-size:14px; display:none; }
+  .err { color:var(--bad); font-size:13.5px; margin-top:9px; min-height:18px; }
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th, td { text-align:left; padding:8px 7px; border-bottom:1px solid var(--line); }
+  th { color:var(--mut); font-weight:600; }
+  .pill { padding:2px 9px; border-radius:999px; font-size:12px; }
+  .pill.confirmed { background:#e2f4e9; color:#146c2e; }
+  .pill.cancelled { background:#fbe7e5; color:var(--bad); }
+  .foot { color:var(--mut); font-size:12.5px; text-align:center; padding:16px; }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📞 BookLine</h1>
+  <p>AI voice front desk for local service businesses — demo for <strong>BrightSmile Dental, Austin TX</strong> · (512) 555-0147</p>
+</header>
+<div class="wrap">
+  <div class="tabs">
+    <button id="tabCustomer" class="on" onclick="showView('customer')">Customer — simulated call</button>
+    <button id="tabAdmin" onclick="showView('admin')">Business — admin</button>
+  </div>
+
+  <!-- ============ CUSTOMER VIEW ============ -->
+  <div id="viewCustomer">
+    <div class="grid">
+      <div class="card">
+        <h2>Simulated phone call</h2>
+        <p class="sub">This panel plays the role of a phone call with the AI receptionist. Type as if you were speaking, tap a suggestion, or use the microphone where the browser supports it. In production this conversation runs over real phone lines (Twilio Voice).</p>
+        <div id="chat"></div>
+        <div class="chips" id="chips"></div>
+        <div class="row">
+          <input type="text" id="chatInput" placeholder="e.g. Hi, I need a cleaning tomorrow morning">
+          <button class="act" id="sendBtn">Send</button>
+          <button class="ghost" id="micBtn" title="Voice input">🎙 Talk</button>
+          <button class="ghost" id="voiceBtn" title="Toggle spoken replies">🔊 Voice: off</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Or book directly</h2>
+        <p class="sub">Same booking engine the receptionist uses. Taken slots disappear, closed days and out-of-hours times are refused politely.</p>
+        <label for="qService">Service</label>
+        <select id="qService"></select>
+        <label for="qDate">Date</label>
+        <input type="date" id="qDate">
+        <label>Available times</label>
+        <div class="chips" id="qSlots"><em style="color:var(--mut);font-size:13px">Pick a service and date.</em></div>
+        <label for="qName">Your name</label>
+        <input type="text" class="full" id="qName" placeholder="Jane Smith">
+        <label for="qPhone">Phone</label>
+        <input type="text" class="full" id="qPhone" placeholder="(512) 555-0100">
+        <div class="row"><button class="act" id="qBook" disabled>Book appointment</button></div>
+        <div class="err" id="qErr"></div>
+        <div class="confirm" id="qConfirm"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ADMIN VIEW ============ -->
+  <div id="viewAdmin" class="hidden">
+    <div class="card">
+      <h2>Appointments — BrightSmile Dental</h2>
+      <p class="sub">Every booking the front desk takes, in one place. The owner sees this instead of a sticky note by the phone.</p>
+      <div class="row" style="margin:0 0 10px"><button class="ghost" onclick="loadAdmin()">↻ Refresh</button></div>
+      <table>
+        <thead><tr><th>Ref</th><th>Customer</th><th>Service</th><th>Date</th><th>Time</th><th>Status</th><th></th></tr></thead>
+        <tbody id="adminBody"><tr><td colspan="7">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="foot">BookLine demo · USD 99–299 per location per month · No real calls are placed and no data leaves this machine.</p>
+</div>
+
+<script>
+let INFO = null, voiceOn = false;
+
+function showView(v){
+  document.getElementById('viewCustomer').classList.toggle('hidden', v!=='customer');
+  document.getElementById('viewAdmin').classList.toggle('hidden', v!=='admin');
+  document.getElementById('tabCustomer').classList.toggle('on', v==='customer');
+  document.getElementById('tabAdmin').classList.toggle('on', v==='admin');
+  if(v==='admin') loadAdmin();
+}
+
+/* ---------- speech (optional, where the browser supports it) ---------- */
+function speak(text){
+  if(!voiceOn || !('speechSynthesis' in window)) return;
+  try { const u = new SpeechSynthesisUtterance(text); u.lang='en-US'; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch(e){}
+}
+document.getElementById('voiceBtn').onclick = (e)=>{
+  voiceOn = !voiceOn;
+  e.target.textContent = voiceOn ? '🔊 Voice: on' : '🔊 Voice: off';
+  if(voiceOn) speak('Voice replies on.');
+};
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById('micBtn');
+if(!SR){ micBtn.disabled = true; micBtn.title = 'Voice input is not supported in this browser'; }
+micBtn.onclick = ()=>{
+  if(!SR) return;
+  const r = new SR(); r.lang='en-US'; r.interimResults=false;
+  micBtn.textContent='🎙 Listening…';
+  r.onresult = (ev)=>{ document.getElementById('chatInput').value = ev.results[0][0].transcript; sendChat(); };
+  r.onend = ()=>{ micBtn.textContent='🎙 Talk'; };
+  r.onerror = ()=>{ micBtn.textContent='🎙 Talk'; };
+  r.start();
+};
+
+/* ---------- chat receptionist: a small guided state machine ---------- */
+const chatEl = document.getElementById('chat'), chipsEl = document.getElementById('chips');
+const flow = { step:'service', serviceId:null, date:null, time:null, name:null };
+function addMsg(text, who){
+  const d = document.createElement('div'); d.className='msg '+(who||'bot'); d.textContent=text;
+  chatEl.appendChild(d); chatEl.scrollTop = chatEl.scrollHeight;
+  if(who!=='user') speak(text);
+}
+function setChips(items, onPick){
+  chipsEl.innerHTML='';
+  items.forEach(it=>{
+    const b=document.createElement('button'); b.textContent=it.label;
+    b.onclick=()=>onPick(it); chipsEl.appendChild(b);
+  });
+}
+function clearChips(){ chipsEl.innerHTML=''; }
+function datePlus(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+function prettyDate(iso){ const d=new Date(iso+'T12:00:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'}); }
+
+async function botAskSlots(){
+  const r = await fetch(`/api/slots?date=${flow.date}&service=${flow.serviceId}`).then(x=>x.json());
+  if(!r.ok || !r.slots.length){
+    addMsg(`I'm sorry, we're fully booked (or closed) on ${prettyDate(flow.date)}. How about one of these days?`);
+    flow.step='date'; askDate(); return;
+  }
+  addMsg(`Here is what I have open on ${prettyDate(flow.date)}. Tap a time, or type one:`);
+  flow.step='time';
+  setChips(r.slots.map(t=>({label:t,value:t})), it=>{ addMsg(it.value,'user'); pickTime(it.value); });
+}
+function askDate(){
+  setChips([0,1,2,3,4].map(n=>({label:(n===0?'Today ':n===1?'Tomorrow ':'')+prettyDate(datePlus(n)), value:datePlus(n)})),
+    it=>{ addMsg(it.label,'user'); flow.date=it.value; clearChips(); botAskSlots(); });
+}
+async function pickTime(t){
+  clearChips();
+  const r = await fetch('/api/slots?date='+flow.date+'&service='+flow.serviceId).then(x=>x.json());
+  if(!r.slots.includes(t)){
+    addMsg(`I'm sorry, ${t} isn't open for that service. Let me show the times again.`);
+    botAskSlots(); return;
+  }
+  flow.time=t; flow.step='name';
+  addMsg('Great. May I have your name for the booking?');
+}
+async function finishBooking(phone){
+  flow.phone = phone;
+  const res = await fetch('/api/book',{method:'POST',headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({customerName:flow.name, phone, serviceId:flow.serviceId, date:flow.date, time:flow.time, source:'simulated call'})});
+  const data = await res.json();
+  if(data.ok){
+    addMsg(data.message);
+    addMsg('Anything else I can help with? Just say "book" to start another appointment.','bot');
+    Object.assign(flow,{step:'done',serviceId:null,date:null,time:null,name:null});
+    clearChips();
+  } else {
+    addMsg(data.message);
+    if(data.code==='slot_taken'){ botAskSlots(); }
+    else { flow.step='name'; addMsg('Let’s try again — may I have your name?'); }
+  }
+}
+function handleUserText(raw){
+  const text = raw.trim(); if(!text) return;
+  addMsg(text,'user');
+  const low = text.toLowerCase();
+  if(flow.step==='done' || low==='book' || low.includes('another')){
+    flow.step='service';
+    addMsg('Of course. Which service would you like?');
+    setChips(INFO.services.map(s=>({label:`${s.name} (${s.durationMin} min)`, value:s.id})),
+      it=>{ addMsg(it.label,'user'); flow.serviceId=it.value; flow.step='date'; addMsg('And which day works for you?'); askDate(); });
+    return;
+  }
+  if(flow.step==='service'){
+    const svc = INFO.services.find(s=> low.includes(s.id) || low.includes(s.name.toLowerCase().split(' ')[0]) || (s.id==='cleaning'&&low.includes('clean')) || (s.id==='emergency'&&(low.includes('pain')||low.includes('hurt')||low.includes('emergency'))) || (s.id==='whitening'&&low.includes('whiten')) || (s.id==='exam'&&(low.includes('exam')||low.includes('x-ray')||low.includes('checkup'))) || (s.id==='consult'&&(low.includes('filling')||low.includes('crown')||low.includes('consult'))));
+    if(svc){ flow.serviceId=svc.id; flow.step='date'; addMsg(`A ${svc.name}, ${svc.durationMin} minutes. Which day works for you?`); askDate(); }
+    else addMsg('I can book a cleaning, an exam and X-ray, whitening, a filling or crown consult, or an emergency visit for tooth pain. Which one would you like?');
+    return;
+  }
+  if(flow.step==='date'){
+    if(low.includes('today')) flow.date=datePlus(0);
+    else if(low.includes('tomorrow')) flow.date=datePlus(1);
+    else if(/^\d{4}-\d{2}-\d{2}$/.test(text)) flow.date=text;
+    if(flow.date){ clearChips(); botAskSlots(); } else addMsg('You can tap a day above, or type a date like 2026-11-12.');
+    return;
+  }
+  if(flow.step==='time'){
+    const m = /(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i.exec(text);
+    if(m){
+      let h=Number(m[1]); const min=m[2]||'00';
+      if(m[3]&&m[3].toLowerCase()==='pm'&&h<12)h+=12;
+      if(m[3]&&m[3].toLowerCase()==='am'&&h===12)h=0;
+      pickTime(String(h).padStart(2,'0')+':'+min);
+    } else addMsg('Tap one of the open times above, or type a time like 10:30.');
+    return;
+  }
+  if(flow.step==='name'){ flow.name=text; flow.step='phone'; addMsg(`Thanks, ${text.split(' ')[0]}. And the best phone number for reminders?`); return; }
+  if(flow.step==='phone'){ finishBooking(text); return; }
+}
+document.getElementById('sendBtn').onclick = ()=>{ const i=document.getElementById('chatInput'); handleUserText(i.value); i.value=''; };
+document.getElementById('chatInput').addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('sendBtn').click(); });
+
+/* ---------- direct booking form (same API) ---------- */
+let qTime=null;
+async function refreshQuickSlots(){
+  qTime=null; document.getElementById('qBook').disabled=true;
+  const svc=document.getElementById('qService').value, date=document.getElementById('qDate').value;
+  const box=document.getElementById('qSlots'); box.innerHTML='';
+  if(!svc||!date){ box.innerHTML='<em style="color:var(--mut);font-size:13px">Pick a service and date.</em>'; return; }
+  const r=await fetch(`/api/slots?date=${date}&service=${svc}`).then(x=>x.json());
+  if(!r.ok||!r.slots.length){ box.innerHTML='<em style="color:var(--mut);font-size:13px">No openings that day (closed or full).</em>'; return; }
+  r.slots.forEach(t=>{ const b=document.createElement('button'); b.textContent=t;
+    b.onclick=()=>{ qTime=t; [...box.children].forEach(c=>c.style.background=''); b.style.background='#cdeee2'; document.getElementById('qBook').disabled=false; };
+    box.appendChild(b); });
+}
+document.getElementById('qBook').onclick = async ()=>{
+  const err=document.getElementById('qErr'), conf=document.getElementById('qConfirm');
+  err.textContent=''; conf.style.display='none';
+  const res=await fetch('/api/book',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({customerName:document.getElementById('qName').value, phone:document.getElementById('qPhone').value,
+      serviceId:document.getElementById('qService').value, date:document.getElementById('qDate').value, time:qTime, source:'web form'})});
+  const data=await res.json();
+  if(data.ok){ conf.style.display='block'; conf.innerHTML='✅ <strong>Booked.</strong> '+data.message; refreshQuickSlots(); }
+  else err.textContent=data.message;
+};
+
+/* ---------- admin ---------- */
+async function loadAdmin(){
+  const r=await fetch('/api/appointments').then(x=>x.json());
+  const tb=document.getElementById('adminBody'); tb.innerHTML='';
+  r.appointments.forEach(a=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${a.ref}</td><td>${a.customerName}<br><span style="color:var(--mut)">${a.phone}</span></td><td>${a.serviceName}</td><td>${a.date}</td><td>${a.time} (${a.durationMin} min)</td><td><span class="pill ${a.status}">${a.status}</span></td>`;
+    const td=document.createElement('td');
+    if(a.status==='confirmed'){ const b=document.createElement('button'); b.className='ghost'; b.textContent='Cancel';
+      b.onclick=async()=>{ await fetch(`/api/appointments/${a.ref}/cancel`,{method:'POST'}); loadAdmin(); }; td.appendChild(b); }
+    tr.appendChild(td); tb.appendChild(tr);
+  });
+  if(!r.appointments.length) tb.innerHTML='<tr><td colspan="7">No appointments yet.</td></tr>';
+}
+
+/* ---------- boot ---------- */
+(async ()=>{
+  INFO = await fetch('/api/info').then(x=>x.json());
+  const sel=document.getElementById('qService');
+  INFO.services.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.textContent=`${s.name} — ${s.durationMin} min${s.priceUSD? ' · $'+s.priceUSD : ' · free'}`; sel.appendChild(o); });
+  document.getElementById('qDate').value = datePlus(1);
+  document.getElementById('qDate').min = datePlus(0);
+  sel.onchange=refreshQuickSlots; document.getElementById('qDate').onchange=refreshQuickSlots;
+  refreshQuickSlots();
+  addMsg(`Thank you for calling ${INFO.clinic.name}, this is BookLine, your AI front desk. I can book, reschedule or answer questions about our hours. How can I help you today?`);
+  setChips(INFO.services.map(s=>({label:`${s.name} (${s.durationMin} min)`, value:s.id})),
+    it=>{ addMsg(it.label,'user'); flow.serviceId=it.value; flow.step='date'; addMsg('And which day works for you?'); askDate(); });
+})();
+</script>
+</body>
+</html>

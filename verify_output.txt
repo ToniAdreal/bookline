@@ -1,0 +1,13 @@
+GET /api/info -> 200 clinic="BrightSmile Dental" services=5
+GET /api/slots?date=2026-11-07&service=cleaning -> 200 open slots: 10:30, 12:00
+POST /api/book {"customerName":"Verify Script","phone":"(512) 555-0199","serviceId":"cleaning","date":"2026-11-07","time":"10:30","source":"verify script"} -> 201 ref=BL-1006
+  confirmation: You're all set, Verify. Teeth Cleaning at BrightSmile Dental on 2026-11-07 at 10:30. Your booking reference is BL-1006. We'll send a reminder the day before.
+POST /api/book (same slot again) -> 409 code=slot_taken
+  refusal: I'm sorry, that time was just taken. I have other openings the same day if you'd like me to list them.
+POST /api/book (Sunday 2026-11-08) -> 400 code=closed
+  refusal: I'm sorry, BrightSmile Dental is closed on Sundays. We are open Monday to Friday 9 to 5, and Saturday 9 to 1. Would another day work?
+POST /api/book (03:00, outside hours) -> 400 code=outside_hours
+  refusal: I'm sorry, Teeth Cleaning needs 60 minutes and has to fit between 09:00 and 13:00. Could we look at a time inside those hours?
+GET /api/appointments -> 200 total=6 my booking present: true status=confirmed
+GET /api/slots after booking -> slot 10:30 still offered: false
+VERIFY RESULT: PASS
